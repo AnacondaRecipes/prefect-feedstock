@@ -8,15 +8,20 @@ package:
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
   sha256: 75966bfcfa86826ecfb20d66240b9994f82ecf3dea8bb371f6660fe1ffab87b4
+  patches:
+    - 0001-Prevent-log-upload-deadlocks-by-too-big-batch-size.patch
 
 build:
   noarch: python
-  number: 0
+  number: 1
   script: {{ PYTHON }} -m pip install --no-deps -vv .
   entry_points:
     - prefect = prefect.cli:cli
 
 requirements:
+  build:
+    - patch  # [not win]
+    - m2-patch  # [win]
   host:
     - python >=3.6
     - pip
@@ -68,3 +73,4 @@ extra:
   recipe-maintainers:
     - cicdw
     - madkinsz
+    - dbast
