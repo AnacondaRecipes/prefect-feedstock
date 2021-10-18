@@ -3,8 +3,5 @@ build_parameters:
   - "--skip-existing"
   - "--error-overlinking"
   - "--error-overdepending"
-  - "-c"
-  - "distro-tooling"
-  
- channels:
-   - distro-tooling
+channels:
+  - distro-tooling
