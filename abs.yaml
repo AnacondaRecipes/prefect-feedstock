@@ -5,3 +5,6 @@ build_parameters:
   - "--error-overdepending"
   - "-c"
   - "distro-tooling"
+  
+ channels:
+   - distro-tooling
