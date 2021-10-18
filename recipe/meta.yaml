@@ -49,6 +49,8 @@ requirements:
     - urllib3 >=1.24.3
 
 test:
+  requires:
+    - python <3.10
   imports:
     - prefect
     - prefect.triggers
