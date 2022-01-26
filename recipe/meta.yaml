@@ -1,5 +1,5 @@
 {% set name = "prefect" %}
-{% set version = "0.15.10" %}
+{% set version = "0.15.13" %}
 
 package:
   name: {{ name|lower }}
@@ -7,9 +7,7 @@ package:
 
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: a11d22ed609a1eae29925aea9f3d1ac78a84df00a86503979ff1512d57233d5a
-  patches:
-    - 0001-Prevent-log-upload-deadlocks-by-too-big-batch-size.patch
+  sha256: a4c2c63a2f950cfacf7b10710b6c5cadbdc55033503212b54a8397f0b6b17d8f
 
 build:
   noarch: python
@@ -37,6 +35,7 @@ requirements:
     - marshmallow >=3.0.0b19
     - marshmallow-oneofschema >=2.0.0b2
     - mypy_extensions >=0.4.0
+    - packaging >=20.0
     - pendulum >=2.0.4
     - python-dateutil >2.7.3
     - pyyaml >=3.13
