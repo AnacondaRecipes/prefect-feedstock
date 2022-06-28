@@ -1,0 +1,141 @@
+diff --git a/changes/pr5946.yaml b/changes/pr5946.yaml
+new file mode 100644
+index 0000000000..31b0cac813
+--- /dev/null
++++ b/changes/pr5946.yaml
+@@ -0,0 +1,5 @@
++enhancement:
++  - "Adds a retry with delay mechanism to Secret.get() - [#5946](https://github.com/PrefectHQ/prefect/pull/5946)"
++
++contributor:
++  - "[Connor Martin](https://github.com/cjmartian)"
+diff --git a/src/prefect/client/secrets.py b/src/prefect/client/secrets.py
+index fd3a55bf9c..35cab883bb 100644
+--- a/src/prefect/client/secrets.py
++++ b/src/prefect/client/secrets.py
+@@ -61,7 +61,8 @@
+ """
+ 
+ import json
+-from typing import Any, Optional
++from time import sleep
++from typing import Any, Optional, Union
+ 
+ import prefect
+ from prefect.client.client import Client
+@@ -74,6 +75,8 @@ class Secret:
+ 
+     Args:
+         - name (str): The name of the secret
++        - retries (int, optional): The number of times to retry getting a secret
++        - delay (Union[float, int], optional): An amount of time to wait before a retry
+ 
+     The value of the `Secret` is not set upon initialization and instead is set
+     either in `prefect.context` or on the server, with behavior dependent on the value
+@@ -84,8 +87,10 @@ class Secret:
+     JSON documents to avoid ambiguous behavior (e.g., `"42"` being parsed as `42`).
+     """
+ 
+-    def __init__(self, name: str):
++    def __init__(self, name: str, retries: int = 0, delay: Union[float, int] = 0.5):
+         self.name = name
++        self.retries = retries
++        self.delay = delay
+ 
+     @property
+     def client(self) -> Client:
+@@ -130,46 +135,55 @@ def get(self) -> Optional[Any]:
+             - ClientError: if the client experiences an unexpected error communicating with the
+                 backend
+         """
+-        if isinstance(prefect.context.get("flow"), prefect.core.flow.Flow):
+-            raise ValueError(
+-                "Secrets should only be retrieved during a Flow run, not while building a Flow."
+-            )
+-
+-        secrets = prefect.context.get("secrets", {})
+-        try:
+-            value = secrets[self.name]
+-        except KeyError:
+-            if prefect.config.backend != "cloud":
+-                raise ValueError(
+-                    'Local Secret "{}" was not found.'.format(self.name)
+-                ) from None
+-            if prefect.context.config.cloud.use_local_secrets is False:
+-                try:
+-                    result = self.client.graphql(
+-                        """
+-                        query($name: String!) {
+-                            secret_value(name: $name)
+-                        }
+-                        """,
+-                        variables=dict(name=self.name),
+-                    )
+-                except ClientError as exc:
+-                    if "No value found for the requested key" in str(exc):
+-                        raise KeyError(
+-                            f"The secret {self.name} was not found.  Please ensure that it "
+-                            f"was set correctly in your tenant: https://docs.prefect.io/"
+-                            f"orchestration/concepts/secrets.html"
+-                        ) from exc
+-                    else:
+-                        raise exc
+-                # the result object is a Box, so we recursively restore builtin
+-                # dict/list classes
+-                result_dict = result.to_dict()
+-                value = result_dict["data"]["secret_value"]
+-            else:
++        current_attempt = 0
++        while current_attempt <= self.retries:
++            current_attempt += 1
++            another_attempt = current_attempt <= self.retries
++            if isinstance(prefect.context.get("flow"), prefect.core.flow.Flow):
+                 raise ValueError(
+-                    'Local Secret "{}" was not found.'.format(self.name)
+-                ) from None
++                    "Secrets should only be retrieved during a Flow run, not while building a Flow."
++                )
++
++            secrets = prefect.context.get("secrets", {})
++            try:
++                value = secrets[self.name]
++            except KeyError:
++                if prefect.config.backend != "cloud":
++                    raise ValueError(
++                        'Local Secret "{}" was not found.'.format(self.name)
++                    ) from None
++                if prefect.context.config.cloud.use_local_secrets is False:
++                    try:
++                        result = self.client.graphql(
++                            """
++                            query($name: String!) {
++                                secret_value(name: $name)
++                            }
++                            """,
++                            variables=dict(name=self.name),
++                        )
++                    except ClientError as exc:
++                        if "No value found for the requested key" in str(exc):
++                            raise KeyError(
++                                f"The secret {self.name} was not found.  Please ensure that it "
++                                f"was set correctly in your tenant: https://docs.prefect.io/"
++                                f"orchestration/concepts/secrets.html"
++                            ) from exc
++                        else:
++                            if another_attempt:
++                                sleep(self.delay)
++                                continue
++                            raise exc
++                    # the result object is a Box, so we recursively restore builtin
++                    # dict/list classes
++                    result_dict = result.to_dict()
++                    value = result_dict["data"]["secret_value"]
++                else:
++                    raise ValueError(
++                        'Local Secret "{}" was not found.'.format(self.name)
++                    ) from None
++            if value:
++                break
+         try:
+             return json.loads(value)
+         except (json.JSONDecodeError, TypeError):
