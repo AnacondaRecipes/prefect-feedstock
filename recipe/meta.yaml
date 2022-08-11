@@ -17,6 +17,9 @@ build:
     - prefect = prefect.cli:cli
 
 requirements:
+  build:
+    - patch  # [not win]
+    - m2-patch  # [win]
   host:
     - python >=3.7
     - pip
@@ -45,6 +48,8 @@ requirements:
     - urllib3 >=1.24.3
 
 test:
+  requires:
+    - python <3.10
   imports:
     - prefect
     - prefect.triggers
@@ -70,3 +75,4 @@ extra:
     - Sahiler
     - cicdw
     - madkinsz
+    - dbast
