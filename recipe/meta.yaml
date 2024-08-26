@@ -1,5 +1,5 @@
 {% set name = "prefect" %}
-{% set version = "1.4.0" %}
+{% set version = "1.4.1" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: 6bf6dda5c57ecea871a4d479de421483542fb884534619711f6b3688462dd8d8
+  sha256: 179f179849286bb8dc0309c8718a7815e6e5fcc016398d2aea45e16fa0e3471b
 
 build:
   noarch: python
@@ -21,7 +21,7 @@ requirements:
     - patch  # [not win]
     - m2-patch  # [win]
   host:
-    - python >=3.7
+    - python >=3.7,<3.12
     - pip
   run:
     - python >=3.7
