@@ -13,10 +13,9 @@ Co-authored-by: Cursor <cursoragent@cursor.com>
  src/prefect/deployments/steps/pull.py |  5 +++++
  src/prefect/filesystems.py            | 18 ++++++++++++++++++
  src/prefect/utilities/git.py          | 10 ++++++++++
- tests/deployment/test_steps.py        | 21 +++++++++++++++++++++
  tests/test_filesystems.py             | 11 +++++++++++
  tests/utilities/test_git.py           | 13 +++++++++++++
- 6 files changed, 78 insertions(+)
+ 5 files changed, 57 insertions(+)
  create mode 100644 src/prefect/utilities/git.py
  create mode 100644 tests/utilities/test_git.py
 
@@ -94,39 +93,7 @@ index 0000000000..760710bae1
 +        raise ValueError(
 +            f"Invalid {parameter_name}: values starting with '-' are not allowed "
 +            "because they may be interpreted as git flags."
-+        )
-diff --git a/tests/deployment/test_steps.py b/tests/deployment/test_steps.py
-index c44e8545f8..2220a49164 100644
---- a/tests/deployment/test_steps.py
-+++ b/tests/deployment/test_steps.py
-@@ -261,6 +261,27 @@ class TestGitCloneStep:
-             stdout=ANY,
-         )
- 
-+    async def test_git_clone_rejects_git_flag_injection_in_repository(self):
-+        with pytest.raises(StepExecutionError):
-+            await run_step(
-+                {
-+                    "prefect.deployments.steps.git_clone": {
-+                        "repository": "--upload-pack=touch /tmp/pwned",
-+                    }
-+                }
-+            )
-+
-+    async def test_git_clone_rejects_git_flag_injection_in_branch(self):
-+        with pytest.raises(StepExecutionError):
-+            await run_step(
-+                {
-+                    "prefect.deployments.steps.git_clone": {
-+                        "repository": "https://github.com/org/repo.git",
-+                        "branch": "--upload-pack=touch /tmp/pwned",
-+                    }
-+                }
-+            )
-+
-     async def test_deprecated_git_clone_project(self, monkeypatch):
-         subprocess_mock = MagicMock()
-         monkeypatch.setattr(
++                 )
 diff --git a/tests/test_filesystems.py b/tests/test_filesystems.py
 index 2fc1d485dd..19c90262d9 100644
 --- a/tests/test_filesystems.py
