@@ -1,0 +1,140 @@
+From a3436c23e017e9eaf548a7e175a00cc37cc8e094 Mon Sep 17 00:00:00 2001
+From: Charles Bousseau <cbousseau@anaconda.com>
+Date: Wed, 8 Jul 2026 23:56:08 -0400
+Subject: [PATCH] Reject git flag injection in GitHub storage and git_clone
+ pull step.
+
+Validate repository, branch, and reference values before invoking git
+subprocesses so user-controlled inputs cannot begin with '-' and be
+interpreted as flags such as --upload-pack.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ src/prefect/deployments/steps/pull.py |  5 +++++
+ src/prefect/filesystems.py            | 18 ++++++++++++++++++
+ src/prefect/utilities/git.py          | 10 ++++++++++
+ tests/test_filesystems.py             | 11 +++++++++++
+ tests/utilities/test_git.py           | 13 +++++++++++++
+ 5 files changed, 57 insertions(+)
+ create mode 100644 src/prefect/utilities/git.py
+ create mode 100644 tests/utilities/test_git.py
+
+diff --git a/src/prefect/deployments/steps/pull.py b/src/prefect/deployments/steps/pull.py
+index 75fa3a4c33..4e33952611 100644
+--- a/src/prefect/deployments/steps/pull.py
++++ b/src/prefect/deployments/steps/pull.py
+@@ -10,6 +10,7 @@ from prefect._internal.compatibility.deprecated import deprecated_callable
+ 
+ from prefect.logging.loggers import get_logger
+ from prefect.blocks.core import Block
++from prefect.utilities.git import validate_git_subprocess_argument
+ 
+ deployment_logger = get_logger("deployment")
+ 
+@@ -105,6 +106,10 @@ def git_clone(
+                 repository: git@github.com:org/repo.git
+         ```
+     """
++    validate_git_subprocess_argument(repository, "repository")
++    if branch is not None:
++        validate_git_subprocess_argument(branch, "branch")
++
+     if access_token and credentials:
+         raise ValueError(
+             "Please provide either an access token or credentials but not both."
+diff --git a/src/prefect/filesystems.py b/src/prefect/filesystems.py
+index f1160d505c..0c6e7d6cff 100644
+--- a/src/prefect/filesystems.py
++++ b/src/prefect/filesystems.py
+@@ -16,6 +16,7 @@ from prefect.exceptions import InvalidRepositoryURLError
+ from prefect.utilities.asyncutils import run_sync_in_worker_thread, sync_compatible
+ from prefect.utilities.compat import copytree
+ from prefect.utilities.filesystem import filter_files
++from prefect.utilities.git import validate_git_subprocess_argument
+ from prefect.utilities.processutils import run_process
+ 
+ 
+@@ -885,6 +886,23 @@ class GitHub(ReadableDeploymentStorage):
+         ),
+     )
+ 
++    @validator("repository")
++    def _validate_repository(cls, v: str) -> str:
++        try:
++            validate_git_subprocess_argument(v, "repository")
++        except ValueError as exc:
++            raise InvalidRepositoryURLError(str(exc)) from exc
++        return v
++
++    @validator("reference")
++    def _validate_reference(cls, v: Optional[str]) -> Optional[str]:
++        if v is not None:
++            try:
++                validate_git_subprocess_argument(v, "reference")
++            except ValueError as exc:
++                raise InvalidRepositoryURLError(str(exc)) from exc
++        return v
++
+     @validator("access_token")
+     def _ensure_credentials_go_with_https(cls, v: str, values: dict) -> str:
+         """Ensure that credentials are not provided with 'SSH' formatted GitHub URLs.
+diff --git a/src/prefect/utilities/git.py b/src/prefect/utilities/git.py
+new file mode 100644
+index 0000000000..760710bae1
+--- /dev/null
++++ b/src/prefect/utilities/git.py
+@@ -0,0 +1,10 @@
++def validate_git_subprocess_argument(value: str, parameter_name: str) -> None:
++    """
++    Reject values that git could interpret as command-line flags when passed to
++    subprocess invocations.
++    """
++    if value.startswith("-"):
++        raise ValueError(
++            f"Invalid {parameter_name}: values starting with '-' are not allowed "
++            "because they may be interpreted as git flags."
++                 )
+diff --git a/tests/test_filesystems.py b/tests/test_filesystems.py
+index 2fc1d485dd..19c90262d9 100644
+--- a/tests/test_filesystems.py
++++ b/tests/test_filesystems.py
+@@ -447,6 +447,17 @@ class TestGitHub:
+         ):
+             await g.get_directory()
+ 
++    def test_repository_rejects_git_flag_injection(self):
++        with pytest.raises(InvalidRepositoryURLError, match="repository"):
++            GitHub(repository="--upload-pack=touch /tmp/pwned")
++
++    def test_reference_rejects_git_flag_injection(self):
++        with pytest.raises(InvalidRepositoryURLError, match="reference"):
++            GitHub(
++                repository="https://github.com/PrefectHQ/prefect.git",
++                reference="--upload-pack=touch /tmp/pwned",
++            )
++
+     async def test_repository_default(self, monkeypatch):
+         class p:
+             returncode = 0
+diff --git a/tests/utilities/test_git.py b/tests/utilities/test_git.py
+new file mode 100644
+index 0000000000..da9b6f99da
+--- /dev/null
++++ b/tests/utilities/test_git.py
+@@ -0,0 +1,13 @@
++import pytest
++
++from prefect.utilities.git import validate_git_subprocess_argument
++
++
++def test_validate_git_subprocess_argument_rejects_dash_prefix():
++    with pytest.raises(ValueError, match="repository"):
++        validate_git_subprocess_argument("--upload-pack=touch /tmp/pwned", "repository")
++
++
++def test_validate_git_subprocess_argument_allows_valid_values():
++    validate_git_subprocess_argument("https://github.com/org/repo.git", "repository")
++    validate_git_subprocess_argument("main", "branch")
+-- 
+2.50.1 (Apple Git-155)
+

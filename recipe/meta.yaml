@@ -8,10 +8,12 @@ package:
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
   sha256: cc8920f1f77151e617ac2dae3aa57cbbb6984a443eb84c6b6ff1ad672c74ea0a
+  patches:
+    - patches/0001-reject-git-flag-injection.patch
 
 build:
   noarch: python
-  number: 0
+  number: 1
   script: {{ PYTHON }} -m pip install --no-deps --no-build-isolation -vv .
   entry_points:
     - prefect = prefect.cli:app
